@@ -1,0 +1,14 @@
+{
+  "name": "pinscope",
+  "version": "1.0.1",
+  "private": true,
+  "description": "A layout intelligence workspace for power electronics engineers.",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node tests/smoke.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

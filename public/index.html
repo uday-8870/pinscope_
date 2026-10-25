@@ -1,0 +1,549 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PinScope — Power-Electronics Layout Intelligence</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <!-- Clean TI-Inspired Top Navigation -->
+  <header class="topbar">
+    <div class="topbar-inner">
+      <div class="brand">
+        <div class="brand-badge" aria-hidden="true">PS</div>
+        <div>
+          <div class="brand-row">
+            <span class="brand-name">PinScope</span>
+            <span class="tag-version">v1.0.1</span>
+          </div>
+          <p class="brand-tagline">Layout Intelligence Workspace for Power Electronics</p>
+        </div>
+      </div>
+
+      <nav class="nav-tabs" role="tablist" aria-label="Workflows">
+        <button class="nav-tab active" data-tab="classify" role="tab" aria-selected="true">
+          <span class="step-num">1</span>
+          <span>Classify</span>
+        </button>
+        <button class="nav-tab" data-tab="select" role="tab" aria-selected="false">
+          <span class="step-num">2</span>
+          <span>Select</span>
+        </button>
+        <button class="nav-tab" data-tab="size" role="tab" aria-selected="false">
+          <span class="step-num">3</span>
+          <span>Size</span>
+        </button>
+      </nav>
+
+      <div class="topbar-actions">
+        <button id="btnSyncPipeline" class="btn btn-secondary" title="Copy package settings into Select & Size">
+          Sync to All Steps
+        </button>
+        <button id="btnExportDossier" class="btn btn-primary">
+          Export Report (.md)
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Simple, Readable Engineering Model Bar -->
+  <div class="notice-bar">
+    <div class="notice-inner">
+      <span>
+        <strong>Engineering Model:</strong> Filters by topology &amp; interconnect, scores candidates using log-normalized distances (<strong>54% combined weight on current + pinout</strong>), and fits per-family curves <code>I = a × area<sup>b</sup></code>. Verify outputs against the official datasheet.
+      </span>
+      <span id="apiStatusBadge" class="status-pill">Ready</span>
+    </div>
+  </div>
+
+  <main class="container">
+
+    <!-- ================================================================== -->
+    <!-- STEP 1: CLASSIFY (Image-Assisted Package / Pinout Recognition)     -->
+    <!-- ================================================================== -->
+    <section id="panel-classify" class="workflow-panel active" role="tabpanel">
+      <div class="section-intro">
+        <div>
+          <h2>1. Classify — Package &amp; Pinout Recognition</h2>
+          <p>Select a reference power package or upload a pinout diagram to inspect terminal functions, exposed thermal pad sizing, and reviewable evidence.</p>
+        </div>
+        <a href="/vqfn-24-hotrod-pinout.svg" download="vqfn-24-hotrod-pinout.svg" class="btn btn-outline btn-sm">
+          Download Sample Pinout SVG
+        </a>
+      </div>
+
+      <div class="two-col-layout">
+        <!-- Left Controls Card -->
+        <aside class="card">
+          <h3 class="card-title">Package Input</h3>
+
+          <div class="field">
+            <label for="classifyPresetSelect">Package Preset</label>
+            <select id="classifyPresetSelect" class="input"></select>
+          </div>
+
+          <div class="upload-box" id="imageDropZone">
+            <input type="file" id="packageImageInput" accept="image/*" hidden />
+            <div class="upload-title">Upload Pinout Image (PNG / SVG / JPG)</div>
+            <div class="upload-sub">Click or drag a package diagram here to verify</div>
+            <div id="uploadedFilePill" class="upload-pill hidden"></div>
+          </div>
+
+          <div class="field-grid-2">
+            <div class="field">
+              <label for="clsLengthMm">Length (mm)</label>
+              <input type="number" id="clsLengthMm" class="input" step="0.1" min="0.5" value="4.0" />
+            </div>
+            <div class="field">
+              <label for="clsWidthMm">Width (mm)</label>
+              <input type="number" id="clsWidthMm" class="input" step="0.1" min="0.5" value="4.0" />
+            </div>
+            <div class="field">
+              <label for="clsPitchMm">Pin Pitch (mm)</label>
+              <input type="number" id="clsPitchMm" class="input" step="0.05" min="0.1" value="0.5" />
+            </div>
+            <div class="field">
+              <label for="clsCurrentA">Rated Current (A)</label>
+              <input type="number" id="clsCurrentA" class="input" step="1" min="0.1" value="25" />
+            </div>
+          </div>
+
+          <div class="check-group">
+            <label class="check-row">
+              <input type="checkbox" id="toggleEvidenceBoxes" checked />
+              <span>Highlight evidence regions on diagram</span>
+            </label>
+            <label class="check-row">
+              <input type="checkbox" id="toggleHotLoop" checked />
+              <span>Show high-di/dt switching loop</span>
+            </label>
+          </div>
+
+          <button id="btnRunClassify" class="btn btn-primary btn-full">
+            Classify Package &amp; Pinout
+          </button>
+        </aside>
+
+        <!-- Right Visual & Evidence Area -->
+        <div class="main-stack">
+          <div class="card">
+            <div class="card-header-row">
+              <div>
+                <h3 class="card-title" id="clsPackageTitle">VQFN-24 HotRod</h3>
+                <p class="card-subtitle" id="clsPackageSubtitle">TPS543B20 Class • Synchronous Buck</p>
+              </div>
+              <div class="summary-badges">
+                <span class="metric-chip">Confidence: <strong id="clsConfidenceVal">95.3%</strong></span>
+                <span class="metric-chip">Est. Loop L: <strong id="clsLoopIndVal">0.38 nH</strong></span>
+                <a id="clsDatasheetLink" href="https://www.ti.com/lit/an/slva887/slva887.pdf" target="_blank" rel="noopener" class="btn btn-outline btn-sm">
+                  Datasheet ↗
+                </a>
+              </div>
+            </div>
+
+            <div class="diagram-split">
+              <!-- Clean White/Light-Gray Technical Footprint Canvas -->
+              <div class="canvas-box">
+                <canvas id="footprintCanvas" width="480" height="390"></canvas>
+                <div class="legend-row">
+                  <span><i class="swatch sw-vin"></i>VIN / Power</span>
+                  <span><i class="swatch sw-sw"></i>SW / Drain</span>
+                  <span><i class="swatch sw-gnd"></i>PGND / Source</span>
+                  <span><i class="swatch sw-sns"></i>Sense / AGND</span>
+                  <span><i class="swatch sw-ctl"></i>Gate / Control</span>
+                </div>
+              </div>
+
+              <!-- Reviewable Evidence List -->
+              <div class="evidence-column">
+                <div class="sub-header">
+                  <h4>Reviewable Evidence</h4>
+                  <span id="clsEvidenceCount" class="tag-neutral">4 items</span>
+                </div>
+                <p class="hint-text">Hover any item to highlight it on the package drawing.</p>
+                <div id="clsEvidenceList" class="evidence-stack"></div>
+              </div>
+            </div>
+
+            <p id="clsPackageDesc" class="pkg-summary-text"></p>
+
+            <div class="drc-panel">
+              <div class="drc-title-row">
+                <strong>Layout &amp; Pinout Checklists</strong>
+                <span id="drcCountBadge" class="tag-neutral">2 notes</span>
+              </div>
+              <ul id="clsDrcList" class="drc-items"></ul>
+            </div>
+          </div>
+
+          <!-- Clean Pinout Table -->
+          <div class="card">
+            <div class="card-header-row">
+              <div>
+                <h3 class="card-title">Pinout Table &amp; Signoff Verification</h3>
+                <p class="card-subtitle">Click any row to locate the pin on the diagram. Check off pins after datasheet review.</p>
+              </div>
+              <div class="row-actions">
+                <span id="pinVerifyCounter" class="tag-success">0 / 25 Verified</span>
+                <button id="btnVerifyAllPins" class="btn btn-secondary btn-sm">Verify All</button>
+                <button id="btnExportPinsCsv" class="btn btn-outline btn-sm">Export CSV</button>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table class="clean-table">
+                <thead>
+                  <tr>
+                    <th>Verified</th>
+                    <th>Pin</th>
+                    <th>Name</th>
+                    <th>Side</th>
+                    <th>Function</th>
+                    <th>Voltage</th>
+                    <th>Current</th>
+                    <th>Layout Guideline</th>
+                  </tr>
+                </thead>
+                <tbody id="classifyPinTableBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- STEP 2: SELECT (Weighted Nearest-Neighbor Layout Reuse)            -->
+    <!-- ================================================================== -->
+    <section id="panel-select" class="workflow-panel" role="tabpanel">
+      <div class="section-intro">
+        <div>
+          <h2>2. Select — Nearest-Neighbor Layout Reuse</h2>
+          <p>Find proven reference PCB layouts filtered by topology and interconnect, ranked with a <strong>54% combined priority on current and pinout</strong>.</p>
+        </div>
+      </div>
+
+      <div class="two-col-layout">
+        <!-- Left Filter Controls -->
+        <aside class="card">
+          <h3 class="card-title">Target Requirements</h3>
+
+          <div class="field">
+            <label for="selTopology">Topology</label>
+            <select id="selTopology" class="input">
+              <option value="ANY">Any Topology</option>
+            </select>
+          </div>
+
+          <div class="field">
+            <label for="selInterconnect">Interconnect Method</label>
+            <select id="selInterconnect" class="input">
+              <option value="ANY">Any Interconnect</option>
+            </select>
+          </div>
+
+          <div class="field-grid-2">
+            <div class="field">
+              <label for="selCurrentA">Current (A)</label>
+              <input type="number" id="selCurrentA" class="input" step="1" min="0.2" value="25" />
+            </div>
+            <div class="field">
+              <label for="selPinCount">Pin Count</label>
+              <input type="number" id="selPinCount" class="input" step="1" min="2" value="24" />
+            </div>
+            <div class="field">
+              <label for="selLengthMm">Length (mm)</label>
+              <input type="number" id="selLengthMm" class="input" step="0.1" min="0.5" value="4.0" />
+            </div>
+            <div class="field">
+              <label for="selWidthMm">Width (mm)</label>
+              <input type="number" id="selWidthMm" class="input" step="0.1" min="0.5" value="4.0" />
+            </div>
+          </div>
+
+          <div class="field">
+            <label for="selPitchMm">Pin Pitch (mm)</label>
+            <input type="number" id="selPitchMm" class="input" step="0.05" min="0.1" value="0.50" />
+          </div>
+
+          <div class="check-group">
+            <label class="check-row">
+              <input type="checkbox" id="selIncludeFallback" />
+              <span>Include cross-topology candidates</span>
+            </label>
+          </div>
+
+          <button id="btnRunSelect" class="btn btn-primary btn-full">
+            Find Matching Layouts
+          </button>
+
+          <div class="weights-box">
+            <div class="weights-title">
+              <span>Distance Weights</span>
+              <strong>54% Current + Pinout</strong>
+            </div>
+            <div class="weight-bar">
+              <span style="width:30%; background:#cc0000" title="Current: 30%">30%</span>
+              <span style="width:24%; background:#1e293b" title="Pin Count: 24%">24%</span>
+              <span style="width:18%; background:#475569" title="Area: 18%">18%</span>
+              <span style="width:14%; background:#64748b" title="Pitch: 14%">14%</span>
+              <span style="width:14%; background:#94a3b8" title="Aspect: 14%">14%</span>
+            </div>
+            <ul class="weight-list">
+              <li><span>Current Rating (I<sub>max</sub>)</span><strong>30%</strong></li>
+              <li><span>Pin Count &amp; Escape</span><strong>24%</strong></li>
+              <li><span>Footprint Area (L × W)</span><strong>18%</strong></li>
+              <li><span>Pin Pitch</span><strong>14%</strong></li>
+              <li><span>Aspect Ratio</span><strong>14%</strong></li>
+            </ul>
+          </div>
+        </aside>
+
+        <!-- Right Recommendations -->
+        <div class="main-stack">
+          <div class="card">
+            <div class="card-header-row">
+              <div>
+                <h3 class="card-title">Recommended Reference Layouts</h3>
+                <p class="card-subtitle" id="selFilterStatusText">Filtered by Topology &amp; Interconnect</p>
+              </div>
+              <span id="selPoolBadge" class="tag-neutral">Matched Pool</span>
+            </div>
+
+            <div id="selectCardsContainer" class="rec-grid"></div>
+          </div>
+
+          <div class="card">
+            <div class="card-header-row">
+              <h3 class="card-title">Score Breakdown Table</h3>
+              <span class="tag-neutral">Log-Normalized Distance</span>
+            </div>
+            <div class="table-wrap">
+              <table class="clean-table">
+                <thead>
+                  <tr>
+                    <th>Rank</th>
+                    <th>Project &amp; Part</th>
+                    <th>Topology / Interconnect</th>
+                    <th>Current</th>
+                    <th>Package</th>
+                    <th>Footprint</th>
+                    <th>Current Dist</th>
+                    <th>Pin Dist</th>
+                    <th>Geom Dist</th>
+                    <th>Match Score</th>
+                  </tr>
+                </thead>
+                <tbody id="selectMatrixBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ================================================================== -->
+    <!-- STEP 3: SIZE (Family-Specific I = a * area^b Curve Fitting)        -->
+    <!-- ================================================================== -->
+    <section id="panel-size" class="workflow-panel" role="tabpanel">
+      <div class="section-intro">
+        <div>
+          <h2>3. Size — Current-to-Die-Area Estimator</h2>
+          <p>First-pass silicon die area and thermal estimation fitted to empirical family curves <code>I = a × area<sup>b</sup></code>.</p>
+        </div>
+      </div>
+
+      <div class="two-col-layout">
+        <!-- Left Sizing Controls -->
+        <aside class="card">
+          <h3 class="card-title">Sizing Parameters</h3>
+
+          <div class="field">
+            <label for="sizeFamilySelect">Semiconductor Process Family</label>
+            <select id="sizeFamilySelect" class="input"></select>
+          </div>
+
+          <div class="field">
+            <label for="sizeSolverMode">Calculation Mode</label>
+            <select id="sizeSolverMode" class="input">
+              <option value="currentToArea">Target Current (A) → Die Area (mm²)</option>
+              <option value="areaToCurrent">Die Area (mm²) → Max Current (A)</option>
+            </select>
+          </div>
+
+          <div class="field" id="sizeCurrentInputGroup">
+            <label for="sizeTargetCurrentA">Target Current (A)</label>
+            <div class="slider-group">
+              <input type="range" id="sizeCurrentSlider" min="1" max="180" step="0.5" value="25" />
+              <input type="number" id="sizeTargetCurrentA" class="input input-narrow" step="0.5" min="0.2" value="25" />
+            </div>
+          </div>
+
+          <div class="field hidden" id="sizeAreaInputGroup">
+            <label for="sizeTargetAreaMm2">Available Die Area (mm²)</label>
+            <div class="slider-group">
+              <input type="range" id="sizeAreaSlider" min="0.5" max="20" step="0.1" value="6.5" />
+              <input type="number" id="sizeTargetAreaMm2" class="input input-narrow" step="0.1" min="0.2" value="6.5" />
+            </div>
+          </div>
+
+          <div class="field-grid-2">
+            <div class="field">
+              <label for="sizeAspectRatio">Aspect Ratio</label>
+              <input type="number" id="sizeAspectRatio" class="input" step="0.1" min="0.5" max="3.0" value="1.0" />
+            </div>
+            <div class="field">
+              <label for="sizeAmbientC">Ambient (°C)</label>
+              <input type="number" id="sizeAmbientC" class="input" step="5" min="-40" max="125" value="25" />
+            </div>
+          </div>
+
+          <button id="btnRunSize" class="btn btn-primary btn-full">
+            Calculate Die Size
+          </button>
+
+          <div class="calibration-box">
+            <div class="sub-header">
+              <h4>Add Data Point (Optional)</h4>
+            </div>
+            <div class="field-grid-2">
+              <div class="field">
+                <label for="calAreaMm2">Area (mm²)</label>
+                <input type="number" id="calAreaMm2" class="input" step="0.1" min="0.2" placeholder="7.5" />
+              </div>
+              <div class="field">
+                <label for="calCurrentA">Current (A)</label>
+                <input type="number" id="calCurrentA" class="input" step="0.5" min="0.2" placeholder="28" />
+              </div>
+            </div>
+            <div class="btn-pair">
+              <button id="btnAddCalibration" class="btn btn-secondary btn-sm">+ Add Point</button>
+              <button id="btnResetCalibration" class="btn btn-outline btn-sm">Reset</button>
+            </div>
+          </div>
+        </aside>
+
+        <!-- Right Sizing Charts & Tables -->
+        <div class="main-stack">
+          <!-- 4 Simple KPI Cards -->
+          <div class="kpi-row">
+            <div class="kpi-box">
+              <span class="kpi-title">Fitted Power Law</span>
+              <strong class="kpi-main" id="sizeFormulaVal">I = 1.90 × area<sup>1.33</sup></strong>
+              <span class="kpi-note" id="sizeR2Val">R² = 0.9990</span>
+            </div>
+            <div class="kpi-box">
+              <span class="kpi-title">Required Die Area</span>
+              <strong class="kpi-main highlight-red" id="sizeTotalAreaVal">6.96 mm²</strong>
+              <span class="kpi-note" id="sizeActiveBreakdownVal">Active: 6.31 mm²</span>
+            </div>
+            <div class="kpi-box">
+              <span class="kpi-title">Est. On-Resistance</span>
+              <strong class="kpi-main" id="sizeRonVal">2.30 mΩ</strong>
+              <span class="kpi-note" id="sizePowerLossVal">Loss: 0.78 W</span>
+            </div>
+            <div class="kpi-box">
+              <span class="kpi-title">Junction Temp &amp; Yield</span>
+              <strong class="kpi-main" id="sizeTjVal">39.5 °C</strong>
+              <span class="kpi-note" id="sizeGdpwVal">9,410 dies/wafer</span>
+            </div>
+          </div>
+
+          <!-- Chart + Floorplan -->
+          <div class="chart-split">
+            <div class="card">
+              <div class="card-header-row">
+                <div>
+                  <h3 class="card-title" id="sizeChartTitle">Current vs. Die Area Curve</h3>
+                  <p class="card-subtitle" id="sizeProcessSubtitle">90nm BCD Copper-Pillar RDL</p>
+                </div>
+                <div class="scale-toggle">
+                  <button class="scale-btn active" id="btnPlotLinear">Linear</button>
+                  <button class="scale-btn" id="btnPlotLog">Log-Log</button>
+                </div>
+              </div>
+              <div class="canvas-box">
+                <canvas id="sizingCurveCanvas" width="540" height="330"></canvas>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header-row">
+                <h3 class="card-title">Die Floorplan</h3>
+                <span id="sizeThermalStatusBadge" class="tag-success">SAFE</span>
+              </div>
+              <div class="canvas-box">
+                <canvas id="dieFloorplanCanvas" width="300" height="330"></canvas>
+              </div>
+            </div>
+          </div>
+
+          <!-- Reference Data Tables -->
+          <div class="tables-split">
+            <div class="card">
+              <div class="card-header-row">
+                <h3 class="card-title">Family Reference Points</h3>
+                <span id="sizeSampleCountBadge" class="tag-neutral">6 points</span>
+              </div>
+              <div class="table-wrap">
+                <table class="clean-table">
+                  <thead>
+                    <tr>
+                      <th>Part</th>
+                      <th>Package</th>
+                      <th>Area (mm²)</th>
+                      <th>Actual I</th>
+                      <th>Fitted I</th>
+                      <th>Error</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sizeSamplesTableBody"></tbody>
+                </table>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header-row">
+                <h3 class="card-title">Cross-Family Comparison</h3>
+                <span class="tag-neutral">At Target Current</span>
+              </div>
+              <div class="table-wrap">
+                <table class="clean-table">
+                  <thead>
+                    <tr>
+                      <th>Process Family</th>
+                      <th>Voltage</th>
+                      <th>Exp (b)</th>
+                      <th>Req. Area</th>
+                      <th>Est. R<sub>DS(on)</sub></th>
+                      <th>GDPW</th>
+                    </tr>
+                  </thead>
+                  <tbody id="sizeCrossFamilyBody"></tbody>
+                </table>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Simple Modal for Signoff Report -->
+  <div id="dossierModal" class="modal-backdrop hidden" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>Engineering Design Review Report</h3>
+        <div class="row-actions">
+          <button id="btnDownloadMarkdown" class="btn btn-primary btn-sm">Download .md</button>
+          <button id="btnCloseModal" class="btn btn-outline btn-sm">Close</button>
+        </div>
+      </div>
+      <pre id="dossierMarkdownPreview" class="modal-pre"></pre>
+    </div>
+  </div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
